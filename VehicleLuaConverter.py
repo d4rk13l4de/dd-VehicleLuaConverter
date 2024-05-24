@@ -1,7 +1,8 @@
 import re
+from collections import defaultdict
 
 def convert_to_qbcore(old_format):
-    new_format = []
+    shop_groups = defaultdict(list)
     pattern = re.compile(r"\['(\w+)'\] = \{\s*"
                          r"\['name'\] = '([^']+)',\s*"
                          r"\['brand'\] = '([^']+)',\s*"
@@ -9,7 +10,7 @@ def convert_to_qbcore(old_format):
                          r"\['price'\] = (\d+),\s*"
                          r"\['category'\] = '([^']+)',\s*"
                          r"\['categoryLabel'\] = '([^']+)',\s*"
-                         r"\['hash'\] = GetHashKey\(`[^`]+`\),\s*"
+                         r"\['hash'\] = GetHashKey\(`([^`]+)`\),\s*"
                          r"\['shop'\] = '([^']+)',\s*"
                          r"\},", re.MULTILINE)
     
@@ -25,9 +26,9 @@ def convert_to_qbcore(old_format):
             "type": match[6],  # Assuming 'categoryLabel' maps to 'type'
             "shop": match[7]
         }
-        new_format.append(vehicle)
+        shop_groups[vehicle['shop']].append(vehicle)
     
-    return new_format
+    return shop_groups
 
 def read_file(file_path):
     with open(file_path, 'r') as file:
@@ -37,21 +38,24 @@ def write_file(file_path, data):
     with open(file_path, 'w') as file:
         file.write(data)
 
-def format_lua_table(new_format):
+def format_lua_table(shop_groups):
     lua_string = "return {\n"
-    for vehicle in new_format:
-        lua_string += f"    {{ model = '{vehicle['model']}', name = '{vehicle['name']}', brand = '{vehicle['brand']}', price = {vehicle['price']}, category = '{vehicle['category']}', type = '{vehicle['type']}', shop = '{vehicle['shop']}' }},\n"
+    for shop, vehicles in shop_groups.items():
+        lua_string += f"    -- Shop: {shop}\n"
+        for vehicle in vehicles:
+            lua_string += f"    {{ model = '{vehicle['model']}', name = '{vehicle['name']}', brand = '{vehicle['brand']}', price = {vehicle['price']}, category = '{vehicle['category']}', type = '{vehicle['type']}', shop = '{vehicle['shop']}' }},\n"
+        lua_string += "\n"
     lua_string += "}"
     return lua_string
 
 # Read the old vehicles.lua file
 old_format = read_file('vehicles.lua')
 
-# Convert to new QBCore format
-new_format = convert_to_qbcore(old_format)
+# Convert to new QBCore format grouped by shop
+shop_groups = convert_to_qbcore(old_format)
 
 # Format the new format as Lua table
-new_format_lua = format_lua_table(new_format)
+new_format_lua = format_lua_table(shop_groups)
 
 # Write the new format to a new Lua file
 write_file('vehicles_new.lua', new_format_lua)
